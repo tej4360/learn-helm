@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: {{ .Values.appName }}
+  name: sample
   labels:
-    app: {{ .Values.appName }}
+    app: sample
 spec:
   containers:
-    - name: {{ .Values.appName }}
+    - name: sample
       image: nginx
       ports:
         - containerPort: 80
