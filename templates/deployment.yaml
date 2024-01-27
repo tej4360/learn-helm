@@ -1,21 +1,78 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sample-deployment
+  name: {{ .Values.appName }}
   labels:
-    app: sample
+    {{- include "roboshop.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
-      app: sample
+      {{- include "roboshop.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       labels:
-        app: sample
+        {{- include "roboshop.selectorLabels" . | nindent 8 }}
     spec:
+      volumes:
+      - name: params-volume
+        emptyDir:
+          sizeLimit: 5Mi
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ .Values.appName }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: aws-ssm-pm
+          image: 633788536644.dkr.ecr.us-east-1.amazonaws.com/aws-parameter-store:latest
+          imagePullPolicy: Always
+          env:
+            - name: PARAMS
+              value: {{ .Values.params }}
+          volumeMounts:
+            - mountPath: /params
+              name: params-volume
       containers:
-        - name: nginx
-          image: nginx
+        - name: {{ .Values.appName }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: 633788536644.dkr.ecr.us-east-1.amazonaws.com/{{ .Values.appName }}:{{ .Values.app_version }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - mountPath: /params
+              name: params-volume
           ports:
-            - containerPort: 80
+            - name: http
+              containerPort: {{ .Values.appPort }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.appPort }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.appPort }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
